@@ -1,6 +1,6 @@
 """
 Architecture Dawgs
-Author(s): Mabry Wilkinson, Veera Karri, Siddhant Sutar
+Author(s): Mabry Wilkinson, Veera Karri
 input_op.py
 Description: Input operations for the simulator.
 """
