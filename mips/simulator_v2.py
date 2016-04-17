@@ -59,7 +59,6 @@ def init_signals(RegDst, ALUSrc, ALUOp1, ALUOp0, Jump, Branch, Branch_NE, MemRea
 def nop(b):
     return all(buffer_read[b][signal] == 0 for signal in control_signals if signal in buffer_read[b])
 
-
 def hazard_detection_unit():
     global PCWrite
     
@@ -72,7 +71,6 @@ def hazard_detection_unit():
         control_unit(1)
         PCWrite = 1
             
-
 def control_unit(i):
     if i == 0:
         init_signals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -138,7 +136,6 @@ def ALU(a, b):
         buffer_write['EX/MEM']['ALU Result'] = format(int(a, 2) + int(b, 2), '016b')
 
 def wb_stage():
-
     if not nop('MEM/WB'):
         if buffer_read['MEM/WB']['RegWrite'] == 1:
             if buffer_read['MEM/WB']['MemToReg'] == 0:
@@ -147,7 +144,6 @@ def wb_stage():
                 register_file[int(buffer_read['MEM/WB']['Rd'], 2)] = buffer_read['MEM/WB']['Read data']
         
 def mem_stage():
-
     buffer_write['MEM/WB']['MemToReg'] = buffer_read['EX/MEM']['MemToReg']
     buffer_write['MEM/WB']['RegWrite'] = buffer_read['EX/MEM']['RegWrite']
 
