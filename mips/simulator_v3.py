@@ -25,46 +25,46 @@ for each in machine_code_file:
 control_signals = ('RegDst', 'ALUSrc', 'ALUOp1', 'ALUOp0', 'Jump', 'Branch', 'Branch_NE', 'MemRead', 'MemWrite', 'MemToReg', 'RegWrite')
 
 """
-PIPELINE REGISTERS (MEM signals also include Jump and Branch_NE)
+PIPELINE REGISTERS
 IF/ID: stores 16-bit instruction, PC+2
-ID/EX: stores EX, MEM, WB control signals + JumpAddr, PC+2, Read data 1, Read data 2, Rs (for forwarding), Rt, Rd, SEImm
-EX/MEM: stores MEM, WB control signals + JumpAddr, BranchAdder, Zero, ALU Result, Read data 2, Rd
+ID/EX: stores EX, MEM, WB control signals + Read data 1, Read data 2, Rs (for forwarding), Rt, Rd, SEImm
+EX/MEM: stores MEM, WB control signals + Zero, ALU Result, Read data 2, Rd
 MEM/WB: stores WB control signals + ALU Result, Read data, Rd
 """
 
 
 buffer_read = {'IF/ID': {'PC+2': None, 'Instruction': None}, \
-           'ID/EX': {'RegDst': None, 'ALUSrc': None, 'ALUOp1': None, 'ALUOp0': None, 'Jump': None, 'Branch': None, 'Branch_NE': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None,  'JumpAddr': None, 'PC+2': None, 'Read data 1': None, 'Read data 2': None, 'Rs': None, 'Rt': None, 'Rd': None, 'SEImm': None}, \
-           'EX/MEM': {'Jump': None, 'Branch': None, 'Branch_NE': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'JumpAddr': None, 'BranchAdder': None, 'Zero': None, 'ALU Result': None, 'Read data 2': None, 'Rd': None}, \
+           'ID/EX': {'RegDst': None, 'ALUSrc': None, 'ALUOp1': None, 'ALUOp0': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Read data 1': None, 'Read data 2': None, 'Rs': None, 'Rt': None, 'Rd': None, 'SEImm': None}, \
+           'EX/MEM': {'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Zero': None, 'ALU Result': None, 'Read data 2': None, 'Rd': None}, \
            'MEM/WB': {'MemToReg': None, 'RegWrite': None, 'ALU Result': None, 'Read data': None, 'Rd': None}}
 
 buffer_write = {'IF/ID': {'PC+2': None, 'Instruction': None}, \
-           'ID/EX': {'RegDst': None, 'ALUSrc': None, 'ALUOp1': None, 'ALUOp0': None, 'Jump': None, 'Branch': None, 'Branch_NE': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None,  'JumpAddr': None, 'PC+2': None, 'Read data 1': None, 'Read data 2': None, 'Rs': None, 'Rt': None, 'Rd': None, 'SEImm': None}, \
-           'EX/MEM': {'Jump': None, 'Branch': None, 'Branch_NE': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'JumpAddr': None, 'BranchAdder': None, 'Zero': None, 'ALU Result': None, 'Read data 2': None, 'Rd': None}, \
+           'ID/EX': {'RegDst': None, 'ALUSrc': None, 'ALUOp1': None, 'ALUOp0': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Read data 1': None, 'Read data 2': None, 'Rs': None, 'Rt': None, 'Rd': None, 'SEImm': None}, \
+           'EX/MEM': {'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Zero': None, 'ALU Result': None, 'Read data 2': None, 'Rd': None}, \
            'MEM/WB': {'MemToReg': None, 'RegWrite': None, 'ALU Result': None, 'Read data': None, 'Rd': None}}
 
 hdu_signals = {'PCWrite': 1, 'IF/IDWrite': 1}
 global_signals = {'PCSrc': 0, 'IF.Flush': 0}
+branch_signals = {'Jump': None, 'Branch': None, 'Branch_NE': None}
 
 def init_signals(RegDst, ALUSrc, ALUOp1, ALUOp0, Jump, Branch, Branch_NE, MemRead, MemWrite, MemToReg, RegWrite):
     buffer_write['ID/EX']['RegDst'] = RegDst
     buffer_write['ID/EX']['ALUSrc'] = ALUSrc
     buffer_write['ID/EX']['ALUOp1'] = ALUOp1
     buffer_write['ID/EX']['ALUOp0'] = ALUOp0
-    buffer_write['ID/EX']['Jump'] = Jump
-    buffer_write['ID/EX']['Branch'] = Branch
-    buffer_write['ID/EX']['Branch_NE'] = Branch_NE
     buffer_write['ID/EX']['MemRead'] = MemRead
     buffer_write['ID/EX']['MemWrite'] = MemWrite
     buffer_write['ID/EX']['MemToReg'] = MemToReg
     buffer_write['ID/EX']['RegWrite'] = RegWrite
 
+    branch_signals['Jump'] = Jump
+    branch_signals['Branch'] = Branch
+    branch_signals['Branch_NE'] = Branch_NE
+
 def nop(b):
     return all(buffer_read[b][signal] == 0 for signal in control_signals if signal in buffer_read[b])
 
-def hazard_detection_unit():
-    global PCWrite
-    
+def hazard_detection_unit():    
     if buffer_read['ID/EX']['MemRead'] == 1:
         if buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][7:10]: # Load use data hazard
             control_unit(0)
@@ -169,16 +169,12 @@ def mem_stage():
             data_memory[int(buffer_read['EX/MEM']['ALU Result'], 2)] = buffer_read['EX/MEM']['Read data 2']
 
 def ex_stage():
-    buffer_write['EX/MEM']['Jump'] = buffer_read['ID/EX']['Jump']
-    buffer_write['EX/MEM']['Branch'] = buffer_read['ID/EX']['Branch']
-    buffer_write['EX/MEM']['Branch_NE'] = buffer_read['ID/EX']['Branch_NE']
     buffer_write['EX/MEM']['MemRead'] = buffer_read['ID/EX']['MemRead']
     buffer_write['EX/MEM']['MemWrite'] = buffer_read['ID/EX']['MemWrite']
     buffer_write['EX/MEM']['MemToReg'] = buffer_read['ID/EX']['MemToReg']
     buffer_write['EX/MEM']['RegWrite'] = buffer_read['ID/EX']['RegWrite']
 
     if not nop('ID/EX'):
-        buffer_write['EX/MEM']['JumpAddr'] = buffer_read['ID/EX']['JumpAddr']
         buffer_write['EX/MEM']['Read data 2'] = buffer_read['ID/EX']['Read data 2']
 
         if buffer_read['ID/EX']['RegDst'] == 0:
@@ -194,19 +190,37 @@ def ex_stage():
             ALU(forwardA, buffer_read['ID/EX']['SEImm'])
                         
 def id_stage():
-    hazard_detection_unit()
-    buffer_write['ID/EX']['JumpAddr'] = int(buffer_read['IF/ID']['Instruction'][4:16], 2) * 2
-    buffer_write['ID/EX']['PC+2'] = buffer_read['IF/ID']['PC+2']
-    buffer_write['ID/EX']['Read data 1'] = register_file[int(buffer_read['IF/ID']['Instruction'][4:7], 2)]
-    buffer_write['ID/EX']['Read data 2'] = register_file[int(buffer_read['IF/ID']['Instruction'][7:10], 2)]
-    buffer_write['ID/EX']['Rs'] = buffer_read['IF/ID']['Instruction'][4:7]
-    buffer_write['ID/EX']['Rt'] = buffer_read['IF/ID']['Instruction'][7:10]
-    buffer_write['ID/EX']['Rd'] = buffer_read['IF/ID']['Instruction'][10:13]
-    buffer_write['ID/EX']['SEImm'] = format(int(buffer_read['IF/ID']['Instruction'][10:16]), '016b')
+    if buffer_read['IF/ID']['Instruction'] == format(0, '016b'):
+        control_unit(0) #do NOP
 
-    if buffer_write['ID/EX']['Branch'] == 1:
-        if buffer_write['ID/EX']['Read data 1'] == buffer_write['ID/EX']['Read data 2']:
-            global_signals['PCSrc'] = 1
+    else:
+        hazard_detection_unit()
+        buffer_write['ID/EX']['PC+2'] = buffer_read['IF/ID']['PC+2']
+        buffer_write['ID/EX']['Read data 1'] = register_file[int(buffer_read['IF/ID']['Instruction'][4:7], 2)]
+        buffer_write['ID/EX']['Read data 2'] = register_file[int(buffer_read['IF/ID']['Instruction'][7:10], 2)]
+        buffer_write['ID/EX']['Rs'] = buffer_read['IF/ID']['Instruction'][4:7]
+        buffer_write['ID/EX']['Rt'] = buffer_read['IF/ID']['Instruction'][7:10]
+        buffer_write['ID/EX']['Rd'] = buffer_read['IF/ID']['Instruction'][10:13]
+        buffer_write['ID/EX']['SEImm'] = format(int(buffer_read['IF/ID']['Instruction'][10:16]), '016b')
+
+        # Initialize
+        global_signals['PCSrc'] = buffer_read['IF/ID']['PC+2']
+        global_signals['IF.Flush'] = 0
+
+        if branch_signals['Jump'] == 1:
+            global_signals['PCSrc'] = int(buffer_read['IF/ID']['Instruction'][4:16], 2) * 2
+            global_signals['IF.Flush'] = 1
+
+        elif branch_signals['Branch'] == 1:
+            if buffer_write['ID/EX']['Read data 1'] == buffer_write['ID/EX']['Read data 2']:
+                global_signals['PCSrc'] += int(buffer_write['ID/EX']['SEImm'], 2)
+                global_signals['IF.Flush'] = 1
+
+        elif branch_signals['Branch_NE'] == 1:
+            if buffer_write['ID/EX']['Read data 1'] != buffer_write['ID/EX']['Read data 2']:
+                global_signals['PCSrc'] = int(buffer_write['ID/EX']['SEImm'], 2)
+                global_signals['IF.Flush'] = 1
+
     
 def if_stage():
     global pc
@@ -215,10 +229,11 @@ def if_stage():
         buffer_write['IF/ID']['PC+2'] = pc + 2
         buffer_write['IF/ID']['Instruction'] = instruction_memory[pc] + instruction_memory[pc+1]
 
+    if global_signals['IF.Flush']:
+        buffer_write['IF/ID']['Instruction'] = format(0, '016b')
+
     if hdu_signals['PCWrite']:
-        pc += 2
-        if global_signals['PCSrc']:
-            pc += (int(buffer_write['ID/EX']['SEImm'], 2))
+        pc = global_signals['PCSrc']
             
 
 def init_buffer_write():
