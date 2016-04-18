@@ -216,7 +216,7 @@ def id_stage():
 
         elif branch_signals['Branch_NE'] == 1:
             if buffer_write['ID/EX']['Read data 1'] != buffer_write['ID/EX']['Read data 2']:
-                global_signals['PCSrc'] = int(buffer_write['ID/EX']['SEImm'], 2)
+                global_signals['PCSrc'] += int(buffer_write['ID/EX']['SEImm'], 2)
                 global_signals['IF.Flush'] = 1
     
 def if_stage():
