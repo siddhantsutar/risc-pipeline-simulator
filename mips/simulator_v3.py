@@ -32,7 +32,6 @@ EX/MEM: stores MEM, WB control signals + Zero, ALU Result, Read data 2, Rd
 MEM/WB: stores WB control signals + ALU Result, Read data, Rd
 """
 
-
 buffer_read = {'IF/ID': {'PC+2': None, 'Instruction': None}, \
            'ID/EX': {'RegDst': None, 'ALUSrc': None, 'ALUOp1': None, 'ALUOp0': None, 'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Read data 1': None, 'Read data 2': None, 'Rs': None, 'Rt': None, 'Rd': None, 'SEImm': None}, \
            'EX/MEM': {'MemRead': None, 'MemWrite': None, 'MemToReg': None, 'RegWrite': None, 'Zero': None, 'ALU Result': None, 'Read data 2': None, 'Rd': None}, \
@@ -90,7 +89,6 @@ def control_unit(i):
             init_signals("X", 1, 0, 0, 0, 0, 0, 0, 1, "X", 0)
         elif opcode == "0011": #beq
             init_signals("X", 0, 0, 1, 0, 1, 0, 0, 0, "X", 0)      
-
 
 def forwarding_unit():
 
@@ -220,7 +218,6 @@ def id_stage():
             if buffer_write['ID/EX']['Read data 1'] != buffer_write['ID/EX']['Read data 2']:
                 global_signals['PCSrc'] = int(buffer_write['ID/EX']['SEImm'], 2)
                 global_signals['IF.Flush'] = 1
-
     
 def if_stage():
     global pc
@@ -235,7 +232,6 @@ def if_stage():
     if hdu_signals['PCWrite']:
         pc = global_signals['PCSrc']
             
-
 def init_buffer_write():
     k1 = buffer_write.keys()
     for i in k1:
