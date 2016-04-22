@@ -27,6 +27,8 @@ ELSE:  sll $6, $6, 2
 END:   addi $2, $2, 2
        sub $3, $3, $3
        slti $3, $3, $1
-       beq $3, 1, LOOP
+       sub $0, $0, $0
+       addi $0, $0, 1
+       beq $3, $0, LOOP
        j EXIT
 EXIT:
