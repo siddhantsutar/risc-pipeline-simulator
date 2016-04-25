@@ -123,6 +123,7 @@ def ALU_control():
     return operation
 
 def ALU(a, b):
+    global pc
     result = 0
     x = int(a, 2)
     if a[0] == "1":
@@ -159,6 +160,7 @@ def ALU(a, b):
         print("sub")
         result = x - y
 
+    print("ALU Result: ", dec_to_bin(result))
     buffer_write['EX/MEM']['ALU Result'] = dec_to_bin(result)
 
 """
@@ -242,35 +244,35 @@ def ID_forwarding_unit():
         double_data = 0
         hazard = 0
 
-        if buffer_read['MEM/WB']['Rd'] == buffer_read['EX/MEM']['Rd']:
+        if buffer_write['MEM/WB']['Rd'] == buffer_write['EX/MEM']['Rd']:
             double_data = 1
 
         # EXE hazard
-        if buffer_read['EX/MEM']['RegWrite'] == 1 and buffer_read['EX/MEM']['Rd'] == buffer_read['ID/EX']['Rs']:
-            print("EXE hazard detected")
+        if buffer_write['EX/MEM']['RegWrite'] == 1 and buffer_write['EX/MEM']['Rd'] == buffer_write['ID/EX']['Rs']:
+            #print(buffer_read['ID/EX']['Rs'])
             hazard = 1
-            forwardA = buffer_read['EX/MEM']['ALU Result']
+            forwardA = buffer_write['EX/MEM']['ALU Result']
 
-        if buffer_read['EX/MEM']['RegWrite'] == 1 and buffer_read['EX/MEM']['Rd'] == buffer_read['ID/EX']['Rt']:
-            print("EXE hazard detected")
+        if buffer_write['EX/MEM']['RegWrite'] == 1 and buffer_write['EX/MEM']['Rd'] == buffer_write['ID/EX']['Rt']:
+            #print(buffer_read['ID/EX']['Rt'])
             hazard = 1
-            forwardB = buffer_read['EX/MEM']['ALU Result']
+            forwardB = buffer_write['EX/MEM']['ALU Result']
 
         # MEM hazard
         if not double_data and not hazard:
-            if buffer_read['MEM/WB']['RegWrite'] == 1 and buffer_read['MEM/WB']['Rd'] == buffer_read['ID/EX']['Rs']:
+            if buffer_write['MEM/WB']['RegWrite'] == 1 and buffer_write['MEM/WB']['Rd'] == buffer_write['ID/EX']['Rs']:
                 print("MEM hazard detected")
-                if buffer_read['MEM/WB']['MemToReg'] == 0:
-                    forwardA = buffer_read['MEM/WB']['ALU Result']
-                elif buffer_read['MEM/WB']['MemToReg'] == 1:
-                    forwardA = buffer_read['MEM/WB']['Read data']
+                if buffer_write['MEM/WB']['MemToReg'] == 0:
+                    forwardA = buffer_write['MEM/WB']['ALU Result']
+                elif buffer_write['MEM/WB']['MemToReg'] == 1:
+                    forwardA = buffer_write['MEM/WB']['Read data']
 
-            if buffer_read['MEM/WB']['RegWrite'] == 1 and buffer_read['MEM/WB']['Rd'] == buffer_read['ID/EX']['Rt']:
+            if buffer_write['MEM/WB']['RegWrite'] == 1 and buffer_write['MEM/WB']['Rd'] == buffer_write['ID/EX']['Rt']:
                 print("MEM hazard detected")
-                if buffer_read['MEM/WB']['MemToReg'] == 0:
-                    forwardB = buffer_read['MEM/WB']['ALU Result']
-                elif buffer_read['MEM/WB']['MemToReg'] == 1:
-                    forwardB = buffer_read['MEM/WB']['Read data']
+                if buffer_write['MEM/WB']['MemToReg'] == 0:
+                    forwardB = buffer_write['MEM/WB']['ALU Result']
+                elif buffer_write['MEM/WB']['MemToReg'] == 1:
+                    forwardB = buffer_write['MEM/WB']['Read data']
 
     return forwardA, forwardB
 
@@ -401,7 +403,7 @@ def sign_extend(x):
 def init_memory():
     global instruction_memory, register_file, data_memory
 
-    machine_code_file = open("machine_code.mips", "r")
+    machine_code_file = open("../programs/test.mips", "r")
 
     # Read machine code into instruction memory
     for each in machine_code_file:
