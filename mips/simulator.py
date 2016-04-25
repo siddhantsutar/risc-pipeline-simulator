@@ -14,19 +14,14 @@ import copy
 """ MEMORY """
 pc = 0
 instruction_memory = []
-register_file = ["0000000000000000", "0000000000000001", "0000000000000010", "0000000000000011", "0000000000000100", "0000000000000101", "0000000000000000", None]
-data_memory = [] * 64 
-
-machine_code_file = open("test.mips", "r")
-
-# Read machine code into instruction memory
-for each in machine_code_file:
-    i = re.sub('\s+', '', each)
-    instruction_memory.append(i[0:8])
-    instruction_memory.append(i[8:16])
+register_file = [None] * 8
+data_memory = [None] * 64 
 
 # List of control signals passed to pipeline registers
-control_signals = ('RegDst', 'ALUSrc', 'ALUOp2', 'ALUOp1', 'ALUOp0', 'MemRead', 'MemWrite', 'MemToReg', 'RegWrite') 
+control_signals = ('RegDst', 'ALUSrc', 'ALUOp2', 'ALUOp1', 'ALUOp0', 'MemRead', 'MemWrite', 'MemToReg', 'RegWrite')
+
+# Keeps track of the number of clock cycles that have passed
+clock_cycle = 0
 
 """
 PIPELINE REGISTERS
@@ -55,7 +50,7 @@ branch_signals = {'Jump': None, 'Branch': None, 'Branch_NE': None}
 def init_signals(RegDst, ALUSrc, ALUOp2, ALUOp1, ALUOp0, Jump, Branch, Branch_NE, MemRead, MemWrite, MemToReg, RegWrite):
     buffer_write['ID/EX']['RegDst'] = RegDst
     buffer_write['ID/EX']['ALUSrc'] = ALUSrc
-    buffer_write['ID/EX']['ALUOp1'] = ALUOp2
+    buffer_write['ID/EX']['ALUOp2'] = ALUOp2
     buffer_write['ID/EX']['ALUOp1'] = ALUOp1
     buffer_write['ID/EX']['ALUOp0'] = ALUOp0
     buffer_write['ID/EX']['MemRead'] = MemRead
@@ -69,7 +64,7 @@ def init_signals(RegDst, ALUSrc, ALUOp2, ALUOp1, ALUOp0, Jump, Branch, Branch_NE
 
 def control_unit(i):
     if i == 0:
-        init_signals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        init_signals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         
     else:
         opcode = buffer_read['IF/ID']['Instruction'][0:4]
@@ -79,11 +74,23 @@ def control_unit(i):
             init_signals(0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1)
         elif opcode == "1010": #sw
             init_signals("X", 1, 0, 0, 0, 0, 0, 0, 0, 1, "X", 0)
+
+        # Branches - since all the control signals other than Branch/Branch_NE/Jump are 0, the subsequent stages will automatically insert NOPs (see nop() module)
         elif opcode == "0011": #beq
-            init_signals("X", 0, 0, 0, 1, 0, 1, 0, 0, 0, "X", 0)
+            init_signals("X", "X", "X", "X", "X", 0, 1, 0, "X", "X", "X", "X")
+        elif opcode == "0100": #bne
+            init_signals("X", "X", "X", "X", "X", 0, 0, 1, "X", "X", "X", "X")
+        elif opcode == "0101": #j
+            init_signals("X", "X", "X", "X", "X", 1, 0, 0, "X", "X", "X", "X")
 
         elif opcode == "0001": #addi
-            init_signals(0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+            init_signals(0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+        elif opcode == "0010": #andi
+            init_signals(0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1)
+        elif opcode == "1000": #ori
+            init_signals(0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1)
+        elif opcode == "1001": #slti
+            init_signals(0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1)
 
 """ ARITHMETIC LOGIC UNIT and CONTROL """
 def ALU_control():
@@ -91,51 +98,93 @@ def ALU_control():
     #F[2-0] will be F[0:3] in Python
 
     Funct = buffer_read['ID/EX']['SEImm'][13:16]
+    F2 = int(Funct[0])
+    F1 = int(Funct[1])
+    F0 = int(Funct[2])
+    not_F2 = int(not F2)
+    not_F1 = int(not F1)
+    not_F0 = int(not F0)
+
+    ALUOp2 = int(buffer_read['ID/EX']['ALUOp2'])
     ALUOp1 = int(buffer_read['ID/EX']['ALUOp1'])
     ALUOp0 = int(buffer_read['ID/EX']['ALUOp0'])
-    ALUOp1_NOT = int(not ALUOp1)
-    ALUOp0_NOT = int(not ALUOp0)
+    not_ALUOp2 = int(not ALUOp2)
+    not_ALUOp1 = int(not ALUOp1)
+    not_ALUOp0 = int(not ALUOp0)
+
     operation = ""
 
-    operation += str((ALUOp1_NOT * ALUOp0) + (ALUOp1 * ALUOp0_NOT * int(Funct[0])))
-    operation += str(ALUOp1_NOT + (ALUOp1 * ALUOp0_NOT * int(Funct[1])))
-    operation += str(ALUOp1 * ALUOp0_NOT * int(Funct[2]))
+    operation += "0" if ALUOp2 + (not_ALUOp1 * not_ALUOp0) + (F2 * not_ALUOp0) == 0 else "1"
+    operation += "0" if (ALUOp2 * ALUOp1) + (F1 * ALUOp1 * not_ALUOp0) == 0 else "1"
+    operation += "0" if (ALUOp2 * ALUOp0) + (F0 * not_ALUOp2 * ALUOp1 * not_ALUOp0) == 0 else "1"
 
-    print(ALUOp1, ALUOp0, Funct)
+    print(operation)
+
     return operation
 
 def ALU(a, b):
-    if ALU_control() == "010":
-        buffer_write['EX/MEM']['ALU Result'] = dec_to_bin(int(a, 2) + int(b, 2))
+    result = 0
+    x = int(a, 2)
+    if a[0] == "1":
+        x = x - (1 << 16)
+    y = int(b, 2)
+    if b[0] == "1":
+        y = y - (1 << 16)
+    operation = ALU_control()
+    if operation == "100":
+        print("add")
+        result = x + y
+    elif operation == "101":
+        print("and")
+        result = x & y
+    elif operation == "110":
+        print("or")
+        result = x | y
+    elif operation == "111":
+        print("slt")
+        if x < y:
+            result = 1
+        else:
+            result = 0
+    elif operation == "000":
+        print("xor")
+        result = x ^ y
+    elif operation == "001":
+        print("sll")
+        result = x << int(buffer_read['ID/EX']['Rt'], 2) #shift constant
+    elif operation == "010":
+        print("srl")
+        result = x >> int(buffer_read['ID/EX']['Rt'], 2) #shift constant
+    elif operation == "011":
+        print("sub")
+        result = x - y
+
+    buffer_write['EX/MEM']['ALU Result'] = dec_to_bin(result)
 
 """
 HAZARD DETECTION UNIT - Handles load-use data hazard and data hazards on branches
 """
-def hazard_detection_unit():    
-    if buffer_read['ID/EX']['MemRead'] == 1:
-        if buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][7:10]: # Load use data hazard
-            control_unit(0)
-            hdu_signals['PCWrite'] = 0
-            hdu_signals['IF/IDWrite'] = 0
+def hazard_detection_unit():
+    if buffer_read['ID/EX']['MemRead'] == 1 and (buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][7:10]): # Load use data hazard
+        control_unit(0)
+        hdu_signals['PCWrite'] = 0
+        hdu_signals['IF/IDWrite'] = 0
 
     # Stalling for data hazard on branches
-    elif branch_signals['Branch'] == 1 or branch_signals['Branch_NE'] == 1:
-        if buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][7:10]:
-            if buffer_read['ID/EX']['RegWrite'] == 1:
-                control_unit(0)
-                hdu_signals['PCWrite'] = 0
-                hdu_signals['IF/IDWrite'] = 0
+    elif (branch_signals['Branch'] == 1 or branch_signals['Branch_NE'] == 1) and (buffer_read['ID/EX']['RegWrite'] == 1) and (buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][7:10]):
+        control_unit(0)
+        hdu_signals['PCWrite'] = 0
+        hdu_signals['IF/IDWrite'] = 0
 
-        if buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rt'] == buffer_read['IF/ID']['Instruction'][7:10]:
-            if buffer_read['ID/EX']['MemRead'] == 1:
-                control_unit(0)
-                hdu_signals['PCWrite'] = 0
-                hdu_signals['IF/IDWrite'] = 0
+    elif (branch_signals['Branch'] == 1 or branch_signals['Branch_NE'] == 1) and (buffer_read['ID/EX']['MemRead'] == 1) and (buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][7:10]):
+        control_unit(0)
+        hdu_signals['PCWrite'] = 0
+        hdu_signals['IF/IDWrite'] = 0
 
-            if buffer_read['EX/MEM']['MemRead'] == 1:
-                control_unit(0)
-                hdu_signals['PCWrite'] = 0
-                hdu_signals['IF/IDWrite'] = 0
+    elif (branch_signals['Branch'] == 1 or branch_signals['Branch_NE'] == 1) and (buffer_read['EX/MEM']['MemRead'] == 1) and (buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][4:7] or buffer_read['ID/EX']['Rd'] == buffer_read['IF/ID']['Instruction'][7:10]):
+        control_unit(0)
+        hdu_signals['PCWrite'] = 0
+        hdu_signals['IF/IDWrite'] = 0
 
     else:
         control_unit(1)
@@ -242,6 +291,7 @@ def mem_stage():
     buffer_write['MEM/WB']['MemToReg'] = buffer_read['EX/MEM']['MemToReg']
     buffer_write['MEM/WB']['RegWrite'] = buffer_read['EX/MEM']['RegWrite']
 
+    print (buffer_read['EX/MEM']['ALU Result'])
     if not nop('EX/MEM'):
         global pc
         buffer_write['MEM/WB']['Rd'] = buffer_read['EX/MEM']['Rd']
@@ -298,7 +348,7 @@ def id_stage():
         buffer_write['ID/EX']['Rs'] = buffer_read['IF/ID']['Instruction'][4:7]
         buffer_write['ID/EX']['Rt'] = buffer_read['IF/ID']['Instruction'][7:10]
         buffer_write['ID/EX']['Rd'] = buffer_read['IF/ID']['Instruction'][10:13]
-        buffer_write['ID/EX']['SEImm'] = buffer_read['IF/ID']['Instruction'][10:16].zfill(16)
+        buffer_write['ID/EX']['SEImm'] = sign_extend(buffer_read['IF/ID']['Instruction'][10:16])
         print(buffer_read['IF/ID']['Instruction'])
 
         forwardA, forwardB = ID_forwarding_unit()
@@ -314,6 +364,7 @@ def id_stage():
 
         elif branch_signals['Branch_NE'] == 1:
             if forwardA != forwardB:
+                print("Branch taken")
                 global_signals['PCSrc'] = 1
                 global_signals['IF.Flush'] = 1
 
@@ -332,18 +383,55 @@ def if_stage():
         if global_signals['PCSrc'] == 0:
             pc = buffer_write['IF/ID']['PC+2']
         elif global_signals['PCSrc'] == 1:
-            pc = buffer_write['IF/ID']['PC+2'] + int(buffer_write['ID/EX']['SEImm'], 2)
+            pc = buffer_write['IF/ID']['PC+2'] + (int(buffer_write['ID/EX']['SEImm'], 2) * 2)
         elif global_signals['PCSrc'] == 2:
             pc = int(buffer_read['IF/ID']['Instruction'][4:16], 2) * 2
 
 """ HELPER MODULES """
-# Convert integer to 16-bit sign-extended binary string
+
+# Convert integer to 16-bit zero-extended binary string
 def dec_to_bin(x):
     return str(bin(x)[2:]).zfill(16)
 
-# If returned true, insert stall cycle in the stage called from
-def nop(b):
-    return all(buffer_read[b][signal] == 0 for signal in control_signals if signal in buffer_read[b])
+# Sign-extend binary string to 16-bit
+def sign_extend(x):
+    return str(x).rjust(16, x[0])
+
+# Initialize memory
+def init_memory():
+    global instruction_memory, register_file, data_memory
+
+    machine_code_file = open("machine_code.mips", "r")
+
+    # Read machine code into instruction memory
+    for each in machine_code_file:
+        i = re.sub('\s+', '', each)
+        instruction_memory.append(i[0:8])
+        instruction_memory.append(i[8:16])
+    
+    register_file[0] = "0000000000000000"
+    register_file[1] = "0000000000000101"
+    register_file[2] = "0000000000010000"
+    register_file[3] = "0000000000000000"
+    register_file[4] = "0000000001000000"
+    register_file[5] = "0001000000010000"
+    register_file[6] = "0000000000001111"
+    register_file[7] = "0000000011110000"
+
+    data_memory[int(register_file[2], 2)+0] = "00000001" #01
+    data_memory[int(register_file[2], 2)+1] = "00000001" #01
+
+    data_memory[int(register_file[2], 2)+2] = "00000001" #01
+    data_memory[int(register_file[2], 2)+3] = "00010000" #10
+
+    data_memory[int(register_file[2], 2)+4] = "00000000" #00
+    data_memory[int(register_file[2], 2)+5] = "00010001" #11
+
+    data_memory[int(register_file[2], 2)+6] = "00000000" #00
+    data_memory[int(register_file[2], 2)+7] = "11110000" #F0
+
+    data_memory[int(register_file[2], 2)+8] = "00000000" #00
+    data_memory[int(register_file[2], 2)+9] = "11111111" #FF
 
 # Initialize signals at the beginning of clock cycle
 def init_clock_cycle():
@@ -369,19 +457,65 @@ def init_buffer_write():
 def buffer_read_empty(b):
     return all(value == None for key, value in buffer_read[b].items())
 
+# If returned true, insert stall cycle in the stage called from
+def nop(b):
+    return all(buffer_read[b][signal] == 0 or buffer_read[b][signal] == "X" for signal in control_signals if signal in buffer_read[b])
+
 # Internal handler to check for simulation termination
 def termination_check():
     return all(v2 == None for k1, v1 in buffer_read.items() for k2, v2 in buffer_read[k1].items())
 
+# Generate output files
+def generate_output(pre=""):
+
+    rf_f = open(pre + str(clock_cycle) + "_register_file.txt", "w")
+    dm_f = open(pre + str(clock_cycle) + "_data_memory.txt", "w")
+
+    # If simulation not started, output the contents of instruction memory
+    if not clock_cycle:
+        im_f = open(str(clock_cycle) + "_instruction_memory.txt", "w")
+
+        im_f.write("Address".ljust(15) + "Hex Value".ljust(15) + "Binary Value\n")
+        for i in range(int(len(instruction_memory)/2)):
+            j = instruction_memory[i*2] + instruction_memory[(i*2)+1]
+            a = "{0:#0{1}x}".format((i*2)+4096, 6)
+            h = "{0:#0{1}x}".format(int(j, 2), 6)
+            b = j[:4] + " " + j[4:8] + " " + j[8:12] + " " + j[12:]
+            im_f.write(a.ljust(15) + h.ljust(15) + b + "\n")
+
+    rf_f.write("Register #".ljust(15) + "Hex Value".ljust(15) + "Binary Value\n")
+    for i in range(len(register_file)):
+        j = register_file[i]
+        r = str("$" + str(i))
+        h = "{0:#0{1}x}".format(int(j, 2), 6)
+        b = j[:4] + " " + j[4:8] + " " + j[8:12] + " " + j[12:]
+        rf_f.write(r.ljust(15) + h.ljust(15) + b + "\n")
+
+    dm_f.write("Address".ljust(15) + "Hex Value".ljust(15) + "Binary Value\n")
+    for i in range(int(len(data_memory)/2)):
+        if data_memory[i*2]:
+            j = data_memory[i*2] + data_memory[(i*2)+1]
+            a = "{0:#0{1}x}".format(i*2, 6)
+            h = "{0:#0{1}x}".format(int(j, 2), 6)
+            b = j[:4] + " " + j[4:8] + " " + j[8:12] + " " + j[12:]
+
+        else:
+            a = "NaN"
+            h = "NaN"
+            b = "NaN"
+
+        dm_f.write(a.ljust(15) + h.ljust(15) + b + "\n")
+
 # Simulator function
 def simulate():
-    global buffer_read
-    print(len(instruction_memory))
-    i = 1
+    global buffer_read, clock_cycle
+    init_memory()
+    generate_output()
     while 1:
-        print("--- Cycle " + str(i) + "---")
-        print(register_file)
+        clock_cycle += 1
+        print("--- Cycle " + str(clock_cycle) + "---")
         print(pc)
+        generate_output()
         init_clock_cycle()
         init_buffer_write()
         if not buffer_read_empty("MEM/WB"):
@@ -402,7 +536,6 @@ def simulate():
         buffer_read = copy.deepcopy(buffer_write)
         if termination_check():
             break
-        i += 1
     print("--- End of simulation ---")
     print(register_file)
 
