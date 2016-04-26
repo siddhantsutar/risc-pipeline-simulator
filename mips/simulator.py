@@ -319,14 +319,15 @@ def ex_stage():
     buffer_write['EX/MEM']['RegWrite'] = buffer_read['ID/EX']['RegWrite']
 
     if not nop('ID/EX'):
-        buffer_write['EX/MEM']['Read data 2'] = buffer_read['ID/EX']['Read data 2']
+        forwardA, forwardB = forwarding_unit()
+
+        buffer_write['EX/MEM']['Read data 2'] = forwardB
 
         if buffer_read['ID/EX']['RegDst'] == 0:
             buffer_write['EX/MEM']['Rd'] = buffer_read['ID/EX']['Rt']
         elif buffer_read['ID/EX']['RegDst'] == 1:
             buffer_write['EX/MEM']['Rd'] = buffer_read['ID/EX']['Rd']
 
-        forwardA, forwardB = forwarding_unit()
 
         if buffer_read['ID/EX']['ALUSrc'] == 0: #R-format instruction
             ALU(forwardA, forwardB)
@@ -403,7 +404,7 @@ def sign_extend(x):
 def init_memory():
     global instruction_memory, register_file, data_memory
 
-    machine_code_file = open("../programs/test.mips", "r")
+    machine_code_file = open("../programs/machine_code.mips", "r")
 
     # Read machine code into instruction memory
     for each in machine_code_file:
@@ -510,10 +511,12 @@ def generate_output(pre=""):
 
 # Simulator function
 def simulate():
-    global buffer_read, clock_cycle
+    global buffer_read, clock_cycle, pc
     init_memory()
     generate_output()
     while 1:
+        if pc == 70:
+            generate_output("loop")
         clock_cycle += 1
         print("--- Cycle " + str(clock_cycle) + "---")
         print(pc)
