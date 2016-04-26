@@ -9,7 +9,9 @@ Description: Simulator for a 16-bit pipelined classic RISC processor.
 import re
 
 # For deep copying write buffer to read buffer
-import copy 
+import copy
+
+import os
 
 """ MEMORY """
 pc = 0
@@ -118,12 +120,9 @@ def ALU_control():
     operation += "0" if (ALUOp2 * ALUOp1) + (F1 * ALUOp1 * not_ALUOp0) == 0 else "1"
     operation += "0" if (ALUOp2 * ALUOp0) + (F0 * not_ALUOp2 * ALUOp1 * not_ALUOp0) == 0 else "1"
 
-    print(operation)
-
     return operation
 
 def ALU(a, b):
-    global pc
     result = 0
     x = int(a, 2)
     if a[0] == "1":
@@ -133,34 +132,33 @@ def ALU(a, b):
         y = y - (1 << 16)
     operation = ALU_control()
     if operation == "100":
-        print("add")
+        #print("add")
         result = x + y
     elif operation == "101":
-        print("and")
+        #print("and")
         result = x & y
     elif operation == "110":
-        print("or")
+        #print("or")
         result = x | y
     elif operation == "111":
-        print("slt")
+        #print("slt")
         if x < y:
             result = 1
         else:
             result = 0
     elif operation == "000":
-        print("xor")
+        #print("xor")
         result = x ^ y
     elif operation == "001":
-        print("sll")
+        #print("sll")
         result = x << int(buffer_read['ID/EX']['Rt'], 2) #shift constant
     elif operation == "010":
-        print("srl")
+        #print("srl")
         result = x >> int(buffer_read['ID/EX']['Rt'], 2) #shift constant
     elif operation == "011":
-        print("sub")
+        #print("sub")
         result = x - y
 
-    print("ALU Result: ", dec_to_bin(result))
     buffer_write['EX/MEM']['ALU Result'] = dec_to_bin(result)
 
 """
@@ -249,12 +247,12 @@ def ID_forwarding_unit():
 
         # EXE hazard
         if buffer_write['EX/MEM']['RegWrite'] == 1 and buffer_write['EX/MEM']['Rd'] == buffer_write['ID/EX']['Rs']:
-            #print(buffer_read['ID/EX']['Rs'])
+            print("EXE hazard detected")
             hazard = 1
             forwardA = buffer_write['EX/MEM']['ALU Result']
 
         if buffer_write['EX/MEM']['RegWrite'] == 1 and buffer_write['EX/MEM']['Rd'] == buffer_write['ID/EX']['Rt']:
-            #print(buffer_read['ID/EX']['Rt'])
+            print("EXE hazard detected")
             hazard = 1
             forwardB = buffer_write['EX/MEM']['ALU Result']
 
@@ -293,7 +291,6 @@ def mem_stage():
     buffer_write['MEM/WB']['MemToReg'] = buffer_read['EX/MEM']['MemToReg']
     buffer_write['MEM/WB']['RegWrite'] = buffer_read['EX/MEM']['RegWrite']
 
-    print (buffer_read['EX/MEM']['ALU Result'])
     if not nop('EX/MEM'):
         global pc
         buffer_write['MEM/WB']['Rd'] = buffer_read['EX/MEM']['Rd']
@@ -352,7 +349,6 @@ def id_stage():
         buffer_write['ID/EX']['Rt'] = buffer_read['IF/ID']['Instruction'][7:10]
         buffer_write['ID/EX']['Rd'] = buffer_read['IF/ID']['Instruction'][10:13]
         buffer_write['ID/EX']['SEImm'] = sign_extend(buffer_read['IF/ID']['Instruction'][10:16])
-        print(buffer_read['IF/ID']['Instruction'])
 
         forwardA, forwardB = ID_forwarding_unit()
 
@@ -404,7 +400,7 @@ def sign_extend(x):
 def init_memory():
     global instruction_memory, register_file, data_memory
 
-    machine_code_file = open("../programs/machine_code.mips", "r")
+    machine_code_file = open("machine_code.mips", "r")
 
     # Read machine code into instruction memory
     for each in machine_code_file:
@@ -471,12 +467,16 @@ def termination_check():
 # Generate output files
 def generate_output(pre=""):
 
-    rf_f = open(pre + str(clock_cycle) + "_register_file.txt", "w")
-    dm_f = open(pre + str(clock_cycle) + "_data_memory.txt", "w")
+    directory = "output"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    rf_f = open("output/" + pre + str(clock_cycle) + "_register_file.txt", "w")
+    dm_f = open("output/" + pre + str(clock_cycle) + "_data_memory.txt", "w")
 
     # If simulation not started, output the contents of instruction memory
     if not clock_cycle:
-        im_f = open(str(clock_cycle) + "_instruction_memory.txt", "w")
+        im_f = open("output/" + str(clock_cycle) + "_instruction_memory.txt", "w")
 
         im_f.write("Address".ljust(15) + "Hex Value".ljust(15) + "Binary Value\n")
         for i in range(int(len(instruction_memory)/2)):
@@ -496,14 +496,13 @@ def generate_output(pre=""):
 
     dm_f.write("Address".ljust(15) + "Hex Value".ljust(15) + "Binary Value\n")
     for i in range(int(len(data_memory)/2)):
+        a = "{0:#0{1}x}".format(i*2, 6)
         if data_memory[i*2]:
             j = data_memory[i*2] + data_memory[(i*2)+1]
-            a = "{0:#0{1}x}".format(i*2, 6)
             h = "{0:#0{1}x}".format(int(j, 2), 6)
             b = j[:4] + " " + j[4:8] + " " + j[8:12] + " " + j[12:]
 
         else:
-            a = "NaN"
             h = "NaN"
             b = "NaN"
 
@@ -516,7 +515,7 @@ def simulate():
     generate_output()
     while 1:
         if pc == 70:
-            generate_output("loop")
+            generate_output("loop") #Generate output at the end of the loop
         clock_cycle += 1
         print("--- Cycle " + str(clock_cycle) + "---")
         print(pc)
@@ -542,7 +541,6 @@ def simulate():
         if termination_check():
             break
     print("--- End of simulation ---")
-    print(register_file)
 
 # Start simulation
 simulate()
