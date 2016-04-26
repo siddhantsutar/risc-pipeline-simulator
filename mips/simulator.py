@@ -353,11 +353,13 @@ def id_stage():
         forwardA, forwardB = ID_forwarding_unit()
 
         if branch_signals['Jump'] == 1:
+            print("Jump taken")
             global_signals['PCSrc'] = 2
             global_signals['IF.Flush'] = 1
 
         elif branch_signals['Branch'] == 1:
             if forwardA == forwardB:
+                print("Branch taken")
                 global_signals['PCSrc'] = 1
                 global_signals['IF.Flush'] = 1
 
