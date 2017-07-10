@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.siddhantsutar.riscpipelinesimulator</groupId>
+   <artifactId>risc-pipeline-simulator</artifactId>
+   <packaging>jar</packaging>
+   <version>1.0.0</version>
+   <name>RISC Pipeline Simulator</name>
+   <dependencies>
+      <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-lang3 -->
+      <dependency>
+         <groupId>org.apache.commons</groupId>
+         <artifactId>commons-lang3</artifactId>
+         <version>3.5</version>
+      </dependency>
+      <!-- https://mvnrepository.com/artifact/com.google.guava/guava -->
+      <dependency>
+         <groupId>com.google.guava</groupId>
+         <artifactId>guava</artifactId>
+         <version>22.0</version>
+      </dependency>
+      <!-- https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/xswingx/prompt.jar -->
+      <dependency>
+         <groupId>org.jdesktop</groupId>
+         <artifactId>xswingx</artifactId>
+         <version>1.0</version>
+      </dependency>
+   </dependencies>
+   <build>
+      <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>2.1</version>
+            <executions>
+               <execution>
+                  <phase>package</phase>
+                  <goals>
+                     <goal>shade</goal>
+                  </goals>
+                  <configuration>
+                     <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                           <mainClass>com.siddhantsutar.riscpipelinesimulator.core.RiscPipelineSimulator</mainClass>
+                        </transformer>
+                     </transformers>
+                  </configuration>
+               </execution>
+            </executions>
+         </plugin>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-install-plugin</artifactId>
+            <version>2.5.2</version>
+            <executions>
+               <!-- Installing /lib/prompt.jar dependency to local repository -->
+               <execution>
+                  <id>install-external</id>
+                  <phase>clean</phase>
+                  <configuration>
+                     <file>${basedir}/lib/prompt.jar</file>
+                     <repositoryLayout>default</repositoryLayout>
+                     <groupId>org.jdesktop</groupId>
+                     <artifactId>xswingx</artifactId>
+                     <version>1.0</version>
+                     <packaging>jar</packaging>
+                     <generatePom>true</generatePom>
+                  </configuration>
+                  <goals>
+                     <goal>install-file</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>2.3.2</version>
+            <configuration>
+               <source>1.7</source>
+               <target>1.7</target>
+            </configuration>
+         </plugin>
+      </plugins>
+   </build>
+</project>
